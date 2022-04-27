@@ -10,8 +10,8 @@
 #include <elfutils/libdw.h>
 
 #ifdef LIBREFLECT_USE_EXCEPTIONS
-#include <libexcept.h>
-#define REFLECT_RAISE(error) throw(error)
+#include "except.h"
+#define REFLECT_RAISE(error) throw(int, error)
 #else
 #include <errno.h>
 #define REFLECT_RAISE(error)                    \
@@ -70,7 +70,7 @@
     }                                                                                        \
     REFLECT_RAISE(ESRCH)
 
-static void __libreflect_report_error(int error, const char *func)
+void __libreflect_report_error(int error, const char *func)
 {
     const char *msg = NULL;
 
