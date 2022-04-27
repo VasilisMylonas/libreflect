@@ -1,8 +1,8 @@
 #ifndef REFLECT_H
 #define REFLECT_H
 
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct reflect_domain reflect_domain_t;
@@ -30,82 +30,70 @@ typedef enum reflect_repr
     REFLECT_REPR_STRING,
 } reflect_repr_t;
 
-/**
- * Loads an ELF file containing debug information and creating a reflection domain.
- *
- * The file is read into memory and then closed.
- *
- * @param file The path to the ELF file.
- * @return The reflection domain, NULL on error.
- */
-reflect_domain_t *reflect_domain_load(const char *file);
+reflect_domain_t* reflect_domain_load_main();
+reflect_domain_t* reflect_domain_load(const char* file);
+void reflect_domain_unload(reflect_domain_t* self);
 
-/**
- * Unloads a reflection domain.
- *
- * This will invalidate all reflect_* objects created from the domain.
- *
- * @param self The domain to unload.
- */
-void reflect_domain_unload(reflect_domain_t *self);
+reflect_type_t* reflect_type(reflect_type_t* self, reflect_domain_t* dom, const char* name);
+reflect_type_t* reflect_typedef_type(reflect_type_t* self, reflect_type_t* out);
+size_t reflect_type_size(reflect_type_t* self);
+const char* reflect_type_name(reflect_type_t* self);
+reflect_repr_t reflect_type_repr(reflect_type_t* self);
+bool reflect_type_is_builtin(reflect_type_t* self);
+bool reflect_type_is_array(reflect_type_t* self);
+bool reflect_type_is_union(reflect_type_t* self);
+bool reflect_type_is_struct(reflect_type_t* self);
+bool reflect_type_is_enum(reflect_type_t* self);
+bool reflect_type_is_typedef(reflect_type_t* self);
+bool reflect_type_is_pointer(reflect_type_t* self);
+bool reflect_type_is_c_string(reflect_type_t* self);
 
-size_t reflect_type_size(reflect_type_t *self);
-const char *reflect_type_name(reflect_type_t *self);
-reflect_repr_t reflect_type_repr(reflect_type_t *self);
-bool reflect_type_is_builtin(reflect_type_t *self);
-bool reflect_type_is_array(reflect_type_t *self);
-bool reflect_type_is_union(reflect_type_t *self);
-bool reflect_type_is_struct(reflect_type_t *self);
-bool reflect_type_is_enum(reflect_type_t *self);
-bool reflect_type_is_typedef(reflect_type_t *self);
-bool reflect_type_is_pointer(reflect_type_t *self);
-bool reflect_type_is_c_string(reflect_type_t *self);
-reflect_type_t *reflect_typedef_type(reflect_type_t *self, reflect_type_t *out);
-reflect_type_t *reflect_type(reflect_type_t *self, reflect_domain_t *dom, const char *name);
+reflect_member_t* reflect_type_member_by_index(reflect_type_t* self,
+                                               size_t index,
+                                               reflect_member_t* out);
+reflect_member_t* reflect_type_member_by_name(reflect_type_t* self,
+                                              const char* name,
+                                              reflect_member_t* out);
+reflect_type_t* reflect_member_type(reflect_member_t* self, reflect_type_t* out);
+const char* reflect_member_name(reflect_member_t* self);
 
-reflect_member_t *reflect_type_member_by_index(reflect_type_t *self, size_t index, reflect_member_t *out);
-reflect_member_t *reflect_type_member_by_name(reflect_type_t *self, const char *name, reflect_member_t *out);
-reflect_type_t *reflect_member_type(reflect_member_t *self, reflect_type_t *out);
-const char *reflect_member_name(reflect_member_t *self);
+void* reflect_get_member(void* object, reflect_member_t* member);
 
-void *reflect_get_member(void *object, reflect_member_t *member);
+reflect_fn_t* reflect_fn(reflect_fn_t* self, reflect_domain_t* dom, const char* name);
+reflect_type_t* reflect_fn_ret_type(reflect_fn_t* self, reflect_type_t* out);
+bool reflect_fn_is_extern(reflect_fn_t* self);
+reflect_var_t* reflect_fn_param_by_index(reflect_fn_t* self, size_t index, reflect_var_t* out);
+reflect_var_t* reflect_fn_param_by_name(reflect_fn_t* self, const char* name, reflect_var_t* out);
+reflect_var_t* reflect_fn_var_by_index(reflect_fn_t* self, size_t index, reflect_var_t* out);
+reflect_var_t* reflect_fn_var_by_name(reflect_fn_t* self, const char* name, reflect_var_t* out);
 
-reflect_fn_t *reflect_fn(reflect_fn_t *self, reflect_domain_t *dom, const char *name);
-reflect_type_t *reflect_fn_ret_type(reflect_fn_t *self, reflect_type_t *out);
-bool reflect_fn_is_extern(reflect_fn_t *self);
-reflect_var_t *reflect_fn_param_by_index(reflect_fn_t *self, size_t index, reflect_var_t *out);
-reflect_var_t *reflect_fn_param_by_name(reflect_fn_t *self, const char *name, reflect_var_t *out);
-reflect_var_t *reflect_fn_var_by_index(reflect_fn_t *self, size_t index, reflect_var_t *out);
-reflect_var_t *reflect_fn_var_by_name(reflect_fn_t *self, const char *name, reflect_var_t *out);
+reflect_var_t* reflect_var(reflect_var_t* self, reflect_domain_t* dom, const char* name);
+reflect_type_t* reflect_var_type(reflect_var_t* self, reflect_type_t* out);
+const char* reflect_var_name(reflect_var_t* self);
 
-reflect_var_t *reflect_var(reflect_var_t *self, reflect_domain_t *dom, const char *name);
-reflect_type_t *reflect_var_type(reflect_var_t *self, reflect_type_t *out);
-const char *reflect_var_name(reflect_var_t *self);
-
-const char *reflect_file(void *obj);
-size_t reflect_line(void *obj);
-size_t reflect_column(void *obj);
+const char* reflect_file(void* obj);
+size_t reflect_line(void* obj);
+size_t reflect_column(void* obj);
 
 #include <stdio.h>
 
 typedef struct reflect_serializer
 {
-    void (*serialize)(void *, reflect_repr_t, size_t, FILE *);
-    void (*begin_member)(const char *, FILE *);
-    void (*end_member)(const char *, FILE *, bool is_last_member);
-    void (*begin_struct)(const char *, FILE *);
-    void (*end_struct)(const char *, FILE *);
+    void (*serialize)(void*, reflect_repr_t, size_t, FILE*);
+    void (*begin_member)(const char*, FILE*);
+    void (*end_member)(const char*, FILE*, bool is_last_member);
+    void (*begin_struct)(const char*, FILE*);
+    void (*end_struct)(const char*, FILE*);
 } reflect_serializer_t;
 
-extern const reflect_serializer_t __libreflect_serializer_json;
-extern const reflect_serializer_t __libreflect_serializer_xml;
-extern const reflect_serializer_t __libreflect_serializer_c;
+#define REFLECT_SERIALIZER_JSON ((reflect_serializer_t*)1)
+#define REFLECT_SERIALIZER_XML  ((reflect_serializer_t*)2)
+#define REFLECT_SERIALIZER_C    ((reflect_serializer_t*)3)
 
-#define REFLECT_SERIALIZER_JSON (&__libreflect_serializer_json)
-#define REFLECT_SERIALIZER_XML (&__libreflect_serializer_xml)
-#define REFLECT_SERIALIZER_C (&__libreflect_serializer_c)
-
-FILE *reflect_serialize(const reflect_serializer_t *self, void *object, reflect_type_t *type, FILE *output);
+FILE* reflect_serialize(const reflect_serializer_t* self,
+                        void* object,
+                        reflect_type_t* type,
+                        FILE* output);
 
 // TODO:
 // inline functions
@@ -122,7 +110,7 @@ FILE *reflect_serialize(const reflect_serializer_t *self, void *object, reflect_
 
 struct reflect_obj
 {
-    reflect_domain_t *domain;
+    reflect_domain_t* domain;
     uint64_t offset;
 };
 

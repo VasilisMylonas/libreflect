@@ -1,78 +1,78 @@
 #include "reflect.h"
 
-#include <unistd.h>
+#include <dwarf.h>
+#include <elfutils/libdw.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dwarf.h>
-#include <inttypes.h>
-#include <elfutils/libdw.h>
+#include <unistd.h>
 
 #ifdef LIBREFLECT_USE_EXCEPTIONS
 #include "except.h"
 #define REFLECT_RAISE(error) throw(int, error)
 #else
 #include <errno.h>
-#define REFLECT_RAISE(error)                    \
-    __libreflect_report_error(error, __func__); \
+#define REFLECT_RAISE(error)                                                                       \
+    __libreflect_report_error(error, __func__);                                                    \
     return 0
 #endif
 
-#define NOT_NULL(param)        \
-    if (param == NULL)         \
-    {                          \
-        REFLECT_RAISE(EFAULT); \
+#define NOT_NULL(param)                                                                            \
+    if (param == NULL)                                                                             \
+    {                                                                                              \
+        REFLECT_RAISE(EFAULT);                                                                     \
     }
 
-#define CHECK_NULL(value)       \
-    void *temp = (void *)value; \
-    if (temp == NULL)           \
-    {                           \
-        REFLECT_RAISE(ENODATA); \
-    }                           \
+#define CHECK_NULL(value)                                                                          \
+    void* temp = (void*)value;                                                                     \
+    if (temp == NULL)                                                                              \
+    {                                                                                              \
+        REFLECT_RAISE(ENODATA);                                                                    \
+    }                                                                                              \
     return temp
 
-#define DIE_TO_REFLECT_OBJ(self, die, out)    \
-    out->_impl.domain = self->_impl.domain;   \
-    out->_impl.offset = dwarf_dieoffset(die); \
+#define DIE_TO_REFLECT_OBJ(self, die, out)                                                         \
+    out->_impl.domain = self->_impl.domain;                                                        \
+    out->_impl.offset = dwarf_dieoffset(die);                                                      \
     return out;
 
-#define REFLECT_OBJ_TO_DIE(self, die)                                               \
-    if (dwarf_offdie((Dwarf *)self->_impl.domain, self->_impl.offset, die) == NULL) \
-    {                                                                               \
-        REFLECT_RAISE(EINVAL);                                                      \
+#define REFLECT_OBJ_TO_DIE(self, die)                                                              \
+    if (dwarf_offdie((Dwarf*)self->_impl.domain, self->_impl.offset, die) == NULL)                 \
+    {                                                                                              \
+        REFLECT_RAISE(EINVAL);                                                                     \
     }
 
-#define OBJ_BY_NAME(self, dom, tag, name)                                                    \
-    NOT_NULL(self);                                                                          \
-    NOT_NULL(dom);                                                                           \
-    NOT_NULL(name);                                                                          \
-    Dwarf_Die cu_die;                                                                        \
-    Dwarf_Die die;                                                                           \
-    Dwarf_CU *cu = NULL;                                                                     \
-    while (dwarf_get_units((Dwarf *)dom, cu, &cu, NULL, NULL, &cu_die, NULL) == 0)           \
-    {                                                                                        \
-        if (dwarf_child(&cu_die, &die) != 0)                                                 \
-        {                                                                                    \
-            REFLECT_RAISE(ENODATA);                                                          \
-        }                                                                                    \
-        while (dwarf_siblingof(&die, &die) == 0)                                             \
-        {                                                                                    \
-            const char *die_name = dwarf_diename(&die);                                      \
-            if ((dwarf_tag(&die) == tag) && die_name != NULL && strcmp(die_name, name) == 0) \
-            {                                                                                \
-                self->_impl.domain = dom;                                                    \
-                self->_impl.offset = dwarf_dieoffset(&die);                                  \
-                return self;                                                                 \
-            }                                                                                \
-        }                                                                                    \
-    }                                                                                        \
+#define OBJ_BY_NAME(self, dom, tag, name)                                                          \
+    NOT_NULL(self);                                                                                \
+    NOT_NULL(dom);                                                                                 \
+    NOT_NULL(name);                                                                                \
+    Dwarf_Die cu_die;                                                                              \
+    Dwarf_Die die;                                                                                 \
+    Dwarf_CU* cu = NULL;                                                                           \
+    while (dwarf_get_units((Dwarf*)dom, cu, &cu, NULL, NULL, &cu_die, NULL) == 0)                  \
+    {                                                                                              \
+        if (dwarf_child(&cu_die, &die) != 0)                                                       \
+        {                                                                                          \
+            REFLECT_RAISE(ENODATA);                                                                \
+        }                                                                                          \
+        while (dwarf_siblingof(&die, &die) == 0)                                                   \
+        {                                                                                          \
+            const char* die_name = dwarf_diename(&die);                                            \
+            if ((dwarf_tag(&die) == tag) && die_name != NULL && strcmp(die_name, name) == 0)       \
+            {                                                                                      \
+                self->_impl.domain = dom;                                                          \
+                self->_impl.offset = dwarf_dieoffset(&die);                                        \
+                return self;                                                                       \
+            }                                                                                      \
+        }                                                                                          \
+    }                                                                                              \
     REFLECT_RAISE(ESRCH)
 
-void __libreflect_report_error(int error, const char *func)
+void __libreflect_report_error(int error, const char* func)
 {
-    const char *msg = NULL;
+    const char* msg = NULL;
 
     switch (error)
     {
@@ -101,17 +101,17 @@ void __libreflect_report_error(int error, const char *func)
     fprintf(stderr, "libreflect: %s at %s()\n", msg, func);
 }
 
-static bool obj_is(reflect_obj_t *self, int tag)
+static bool obj_is(reflect_obj_t* self, int tag)
 {
     Dwarf_Die die;
-    if (dwarf_offdie((Dwarf *)self->domain, self->offset, &die) == NULL)
+    if (dwarf_offdie((Dwarf*)self->domain, self->offset, &die) == NULL)
     {
         return false;
     }
     return dwarf_tag(&die) == tag;
 }
 
-static Dwarf_Die *die_type(Dwarf_Die *die, Dwarf_Die *out)
+static Dwarf_Die* die_type(Dwarf_Die* die, Dwarf_Die* out)
 {
     Dwarf_Attribute attr;
     if (dwarf_attr(die, DW_AT_type, &attr) == NULL)
@@ -127,7 +127,7 @@ static Dwarf_Die *die_type(Dwarf_Die *die, Dwarf_Die *out)
     return out;
 }
 
-static bool die_is_type(Dwarf_Die *die)
+static bool die_is_type(Dwarf_Die* die)
 {
     switch (dwarf_tag(die))
     {
@@ -144,7 +144,7 @@ static bool die_is_type(Dwarf_Die *die)
     };
 }
 
-static reflect_type_t *peel_type(reflect_type_t *type)
+static reflect_type_t* peel_type(reflect_type_t* type)
 {
     if (type == NULL)
     {
@@ -152,7 +152,7 @@ static reflect_type_t *peel_type(reflect_type_t *type)
     }
 
     Dwarf_Die die;
-    if (dwarf_offdie((Dwarf *)type->_impl.domain, type->_impl.offset, &die) == NULL)
+    if (dwarf_offdie((Dwarf*)type->_impl.domain, type->_impl.offset, &die) == NULL)
     {
         return NULL;
     }
@@ -167,15 +167,15 @@ static reflect_type_t *peel_type(reflect_type_t *type)
     return type;
 }
 
-static const char *get_name(reflect_obj_t *obj)
+static const char* get_name(reflect_obj_t* obj)
 {
     Dwarf_Die die;
-    if (dwarf_offdie((Dwarf *)obj->domain, obj->offset, &die) == NULL)
+    if (dwarf_offdie((Dwarf*)obj->domain, obj->offset, &die) == NULL)
     {
         return NULL;
     }
 
-    const char *name = dwarf_diename(&die);
+    const char* name = dwarf_diename(&die);
     if (name == NULL)
     {
         return NULL;
@@ -184,10 +184,10 @@ static const char *get_name(reflect_obj_t *obj)
     return name;
 }
 
-static reflect_obj_t *get_type(reflect_obj_t *self, reflect_obj_t *out)
+static reflect_obj_t* get_type(reflect_obj_t* self, reflect_obj_t* out)
 {
     Dwarf_Die obj_die;
-    if (dwarf_offdie((Dwarf *)self->domain, self->offset, &obj_die) == NULL)
+    if (dwarf_offdie((Dwarf*)self->domain, self->offset, &obj_die) == NULL)
     {
         return NULL;
     }
@@ -203,11 +203,14 @@ static reflect_obj_t *get_type(reflect_obj_t *self, reflect_obj_t *out)
     return out;
 }
 
-static reflect_obj_t *child_by_name(reflect_obj_t *obj, int tag, const char *name, reflect_obj_t *out)
+static reflect_obj_t* child_by_name(reflect_obj_t* obj,
+                                    int tag,
+                                    const char* name,
+                                    reflect_obj_t* out)
 {
     // Extract DWARF DIE from object.
     Dwarf_Die obj_die;
-    if (dwarf_offdie((Dwarf *)obj->domain, obj->offset, &obj_die) == NULL)
+    if (dwarf_offdie((Dwarf*)obj->domain, obj->offset, &obj_die) == NULL)
     {
         return NULL;
     }
@@ -233,11 +236,11 @@ static reflect_obj_t *child_by_name(reflect_obj_t *obj, int tag, const char *nam
     return NULL;
 }
 
-static reflect_obj_t *child_by_index(reflect_obj_t *obj, int tag, size_t index, reflect_obj_t *out)
+static reflect_obj_t* child_by_index(reflect_obj_t* obj, int tag, size_t index, reflect_obj_t* out)
 {
     // Extract DWARF DIE from object.
     Dwarf_Die obj_die;
-    if (dwarf_offdie((Dwarf *)obj->domain, obj->offset, &obj_die) == NULL)
+    if (dwarf_offdie((Dwarf*)obj->domain, obj->offset, &obj_die) == NULL)
     {
         return NULL;
     }
@@ -270,7 +273,7 @@ static reflect_obj_t *child_by_index(reflect_obj_t *obj, int tag, size_t index, 
     return NULL;
 }
 
-size_t reflect_line(void *obj)
+size_t reflect_line(void* obj)
 {
     NOT_NULL(obj);
 
@@ -283,7 +286,7 @@ size_t reflect_line(void *obj)
     return (size_t)line;
 }
 
-size_t reflect_column(void *obj)
+size_t reflect_column(void* obj)
 {
     NOT_NULL(obj);
 
@@ -296,13 +299,13 @@ size_t reflect_column(void *obj)
     return (size_t)col;
 }
 
-const char *reflect_file(void *obj)
+const char* reflect_file(void* obj)
 {
     NOT_NULL(obj);
     CHECK_NULL(dwarf_decl_file(obj));
 }
 
-reflect_domain_t *reflect_domain_load(const char *file)
+reflect_domain_t* reflect_domain_load(const char* file)
 {
     NOT_NULL(file);
 
@@ -312,7 +315,7 @@ reflect_domain_t *reflect_domain_load(const char *file)
         REFLECT_RAISE(EBADF);
     }
 
-    Dwarf *d = dwarf_begin(fd, DWARF_C_READ);
+    Dwarf* d = dwarf_begin(fd, DWARF_C_READ);
     close(fd);
 
     if (d == NULL)
@@ -320,10 +323,10 @@ reflect_domain_t *reflect_domain_load(const char *file)
         REFLECT_RAISE(EMEDIUMTYPE);
     }
 
-    return (reflect_domain_t *)d;
+    return (reflect_domain_t*)d;
 }
 
-void reflect_domain_unload(reflect_domain_t *self)
+void reflect_domain_unload(reflect_domain_t* self)
 {
     // TODO
     if (self == NULL)
@@ -331,55 +334,61 @@ void reflect_domain_unload(reflect_domain_t *self)
         return;
     }
 
-    if (dwarf_end((Dwarf *)self) != 0)
+    if (dwarf_end((Dwarf*)self) != 0)
     {
         // TODO: Do we swallow this?
     }
 }
 
-bool reflect_type_is_typedef(reflect_type_t *self)
+reflect_domain_t* reflect_domain_load_main()
+{
+    extern const char* __progname;
+    return reflect_domain_load(__progname);
+}
+
+bool reflect_type_is_typedef(reflect_type_t* self)
 {
     NOT_NULL(self);
     return obj_is(&self->_impl, DW_TAG_typedef);
 }
 
-bool reflect_type_is_array(reflect_type_t *self)
+bool reflect_type_is_array(reflect_type_t* self)
 {
     NOT_NULL(self);
     return obj_is(&self->_impl, DW_TAG_array_type);
 }
 
-bool reflect_type_is_builtin(reflect_type_t *self)
+bool reflect_type_is_builtin(reflect_type_t* self)
 {
     NOT_NULL(self);
     return obj_is(&self->_impl, DW_TAG_base_type);
 }
 
-bool reflect_type_is_union(reflect_type_t *self)
+bool reflect_type_is_union(reflect_type_t* self)
 {
     NOT_NULL(self);
     return obj_is(&self->_impl, DW_TAG_union_type);
 }
 
-bool reflect_type_is_struct(reflect_type_t *self)
+bool reflect_type_is_struct(reflect_type_t* self)
 {
     NOT_NULL(self);
     return obj_is(&self->_impl, DW_TAG_structure_type);
 }
 
-bool reflect_type_is_enum(reflect_type_t *self)
+bool reflect_type_is_enum(reflect_type_t* self)
 {
     NOT_NULL(self);
     return obj_is(&self->_impl, DW_TAG_enumeration_type);
 }
 
-bool reflect_type_is_pointer(reflect_type_t *self)
+bool reflect_type_is_pointer(reflect_type_t* self)
 {
     NOT_NULL(self);
     return obj_is(&self->_impl, DW_TAG_pointer_type);
 }
 
-bool reflect_type_is_c_string(reflect_type_t *self)
+bool reflect_type_is_c_string(reflect_type_t* self)
 {
     NOT_NULL(self);
 
@@ -404,7 +413,7 @@ bool reflect_type_is_c_string(reflect_type_t *self)
     return false;
 }
 
-size_t reflect_type_size(reflect_type_t *self)
+size_t reflect_type_size(reflect_type_t* self)
 {
     NOT_NULL(self);
 
@@ -419,7 +428,7 @@ size_t reflect_type_size(reflect_type_t *self)
     return (size_t)size;
 }
 
-const char *reflect_type_name(reflect_type_t *self)
+const char* reflect_type_name(reflect_type_t* self)
 {
     NOT_NULL(self);
 
@@ -437,7 +446,7 @@ const char *reflect_type_name(reflect_type_t *self)
     CHECK_NULL(get_name(&self->_impl));
 }
 
-reflect_repr_t reflect_type_repr(reflect_type_t *self)
+reflect_repr_t reflect_type_repr(reflect_type_t* self)
 {
     NOT_NULL(self);
 
@@ -493,12 +502,14 @@ reflect_repr_t reflect_type_repr(reflect_type_t *self)
     }
 }
 
-reflect_type_t *reflect_type(reflect_type_t *self, reflect_domain_t *dom, const char *name)
+reflect_type_t* reflect_type(reflect_type_t* self, reflect_domain_t* dom, const char* name)
 {
     OBJ_BY_NAME(self, dom, DW_TAG_typedef || die_is_type(&die), name);
 }
 
-reflect_member_t *reflect_type_member_by_index(reflect_type_t *self, size_t index, reflect_member_t *out)
+reflect_member_t* reflect_type_member_by_index(reflect_type_t* self,
+                                               size_t index,
+                                               reflect_member_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
@@ -506,7 +517,9 @@ reflect_member_t *reflect_type_member_by_index(reflect_type_t *self, size_t inde
     CHECK_NULL(child_by_index(&self->_impl, DW_TAG_member, index, &out->_impl));
 }
 
-reflect_member_t *reflect_type_member_by_name(reflect_type_t *self, const char *name, reflect_member_t *out)
+reflect_member_t* reflect_type_member_by_name(reflect_type_t* self,
+                                              const char* name,
+                                              reflect_member_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
@@ -514,30 +527,30 @@ reflect_member_t *reflect_type_member_by_name(reflect_type_t *self, const char *
     CHECK_NULL(child_by_name(&self->_impl, DW_TAG_member, name, &out->_impl));
 }
 
-reflect_type_t *reflect_member_type(reflect_member_t *self, reflect_type_t *out)
+reflect_type_t* reflect_member_type(reflect_member_t* self, reflect_type_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
 
-    CHECK_NULL(peel_type((reflect_type_t *)get_type(&self->_impl, &out->_impl)));
+    CHECK_NULL(peel_type((reflect_type_t*)get_type(&self->_impl, &out->_impl)));
 }
 
-const char *reflect_member_name(reflect_member_t *self)
+const char* reflect_member_name(reflect_member_t* self)
 {
     NOT_NULL(self);
 
     CHECK_NULL(get_name(&self->_impl));
 }
 
-reflect_type_t *reflect_typedef_type(reflect_type_t *self, reflect_type_t *out)
+reflect_type_t* reflect_typedef_type(reflect_type_t* self, reflect_type_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
 
-    CHECK_NULL(peel_type((reflect_type_t *)get_type(&self->_impl, &out->_impl)));
+    CHECK_NULL(peel_type((reflect_type_t*)get_type(&self->_impl, &out->_impl)));
 }
 
-void *reflect_get_member(void *object, reflect_member_t *member)
+void* reflect_get_member(void* object, reflect_member_t* member)
 {
     NOT_NULL(object);
     NOT_NULL(member);
@@ -564,13 +577,13 @@ void *reflect_get_member(void *object, reflect_member_t *member)
         {
             REFLECT_RAISE(ENODATA);
         }
-        return ((uint8_t *)object) + offset;
+        return ((uint8_t*)object) + offset;
     default:
         REFLECT_RAISE(ENODATA);
     }
 }
 
-bool reflect_fn_is_extern(reflect_fn_t *self)
+bool reflect_fn_is_extern(reflect_fn_t* self)
 {
     NOT_NULL(self);
 
@@ -593,7 +606,7 @@ bool reflect_fn_is_extern(reflect_fn_t *self)
     return value;
 }
 
-reflect_var_t *reflect_fn_var_by_index(reflect_fn_t *self, size_t index, reflect_var_t *out)
+reflect_var_t* reflect_fn_var_by_index(reflect_fn_t* self, size_t index, reflect_var_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
@@ -601,7 +614,7 @@ reflect_var_t *reflect_fn_var_by_index(reflect_fn_t *self, size_t index, reflect
     CHECK_NULL(child_by_index(&self->_impl, DW_TAG_variable, index, &out->_impl));
 }
 
-reflect_var_t *reflect_fn_var_by_name(reflect_fn_t *self, const char *name, reflect_var_t *out)
+reflect_var_t* reflect_fn_var_by_name(reflect_fn_t* self, const char* name, reflect_var_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
@@ -609,7 +622,7 @@ reflect_var_t *reflect_fn_var_by_name(reflect_fn_t *self, const char *name, refl
     CHECK_NULL(child_by_name(&self->_impl, DW_TAG_variable, name, &out->_impl));
 }
 
-reflect_var_t *reflect_fn_param_by_index(reflect_fn_t *self, size_t index, reflect_var_t *out)
+reflect_var_t* reflect_fn_param_by_index(reflect_fn_t* self, size_t index, reflect_var_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
@@ -617,7 +630,7 @@ reflect_var_t *reflect_fn_param_by_index(reflect_fn_t *self, size_t index, refle
     CHECK_NULL(child_by_index(&self->_impl, DW_TAG_formal_parameter, index, &out->_impl));
 }
 
-reflect_var_t *reflect_fn_param_by_name(reflect_fn_t *self, const char *name, reflect_var_t *out)
+reflect_var_t* reflect_fn_param_by_name(reflect_fn_t* self, const char* name, reflect_var_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
@@ -625,40 +638,43 @@ reflect_var_t *reflect_fn_param_by_name(reflect_fn_t *self, const char *name, re
     CHECK_NULL(child_by_name(&self->_impl, DW_TAG_formal_parameter, name, &out->_impl));
 }
 
-reflect_type_t *reflect_fn_ret_type(reflect_fn_t *self, reflect_type_t *out)
+reflect_type_t* reflect_fn_ret_type(reflect_fn_t* self, reflect_type_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
 
-    CHECK_NULL(peel_type((reflect_type_t *)get_type(&self->_impl, &out->_impl)));
+    CHECK_NULL(peel_type((reflect_type_t*)get_type(&self->_impl, &out->_impl)));
 }
 
-reflect_type_t *reflect_var_type(reflect_var_t *self, reflect_type_t *out)
+reflect_type_t* reflect_var_type(reflect_var_t* self, reflect_type_t* out)
 {
     NOT_NULL(self);
     NOT_NULL(out);
 
-    CHECK_NULL(peel_type((reflect_type_t *)get_type(&self->_impl, &out->_impl)));
+    CHECK_NULL(peel_type((reflect_type_t*)get_type(&self->_impl, &out->_impl)));
 }
 
-const char *reflect_var_name(reflect_var_t *self)
+const char* reflect_var_name(reflect_var_t* self)
 {
     NOT_NULL(self);
 
     CHECK_NULL(get_name(&self->_impl));
 }
 
-reflect_fn_t *reflect_fn(reflect_fn_t *self, reflect_domain_t *dom, const char *name)
+reflect_fn_t* reflect_fn(reflect_fn_t* self, reflect_domain_t* dom, const char* name)
 {
     OBJ_BY_NAME(self, dom, DW_TAG_subprogram, name);
 }
 
-reflect_var_t *reflect_var(reflect_var_t *self, reflect_domain_t *dom, const char *name)
+reflect_var_t* reflect_var(reflect_var_t* self, reflect_domain_t* dom, const char* name)
 {
     OBJ_BY_NAME(self, dom, DW_TAG_variable, name);
 }
 
-static FILE *reflect_serialize_inner(const reflect_serializer_t *self, void *object, reflect_type_t *type, FILE *output)
+static FILE* reflect_serialize_inner(const reflect_serializer_t* self,
+                                     void* object,
+                                     reflect_type_t* type,
+                                     FILE* output)
 {
     if (reflect_type_is_typedef(type))
     {
@@ -682,20 +698,20 @@ static FILE *reflect_serialize_inner(const reflect_serializer_t *self, void *obj
 
     if (reflect_type_is_pointer(type))
     {
-        if (*(void **)object == NULL)
+        if (*(void**)object == NULL)
         {
-            self->serialize(object, REFLECT_REPR_POINTER, sizeof(void *), output);
+            self->serialize(object, REFLECT_REPR_POINTER, sizeof(void*), output);
         }
         else if (reflect_type_is_c_string(type))
         {
-            self->serialize(object, REFLECT_REPR_STRING, sizeof(void *), output);
+            self->serialize(object, REFLECT_REPR_STRING, sizeof(void*), output);
         }
         else
         {
-            const char *reflect_var_name(reflect_var_t * self);
+            const char* reflect_var_name(reflect_var_t * self);
 
             Dwarf_Die inner_type;
-            dwarf_offdie((Dwarf *)type->_impl.domain, type->_impl.offset, &inner_type);
+            dwarf_offdie((Dwarf*)type->_impl.domain, type->_impl.offset, &inner_type);
             die_type(&inner_type, &inner_type);
 
             dwarf_peel_type(&inner_type, &inner_type);
@@ -705,7 +721,7 @@ static FILE *reflect_serialize_inner(const reflect_serializer_t *self, void *obj
                 ._impl.offset = dwarf_dieoffset(&inner_type),
             };
 
-            reflect_serialize(self, *(void **)object, &type2, output);
+            reflect_serialize(self, *(void**)object, &type2, output);
         }
 
         return output;
@@ -714,7 +730,7 @@ static FILE *reflect_serialize_inner(const reflect_serializer_t *self, void *obj
     if (reflect_type_is_struct(type))
     {
         // TODO: error
-        const char *type_name = reflect_type_name(type);
+        const char* type_name = reflect_type_name(type);
 
         self->begin_struct(type_name, output);
 
@@ -727,7 +743,7 @@ static FILE *reflect_serialize_inner(const reflect_serializer_t *self, void *obj
             }
 
             // TODO: error
-            const char *member_name = reflect_member_name(&member);
+            const char* member_name = reflect_member_name(&member);
 
             reflect_type_t member_type;
             reflect_member_type(&member, &member_type);
@@ -736,10 +752,13 @@ static FILE *reflect_serialize_inner(const reflect_serializer_t *self, void *obj
 
             reflect_serialize(self, reflect_get_member(object, &member), &member_type, output);
 
-            // This is really dumb. Some formats, cough cough JSON, need special handling for the last member.
-            // We have to provide this info to the user.
+            // This is really dumb. Some formats, cough cough JSON, need special handling for the
+            // last member. We have to provide this info to the user.
             reflect_member_t dummy;
-            self->end_member(member_name, output, child_by_index(&type->_impl, DW_TAG_member, i + 1, &dummy._impl) == NULL);
+            self->end_member(member_name,
+                             output,
+                             child_by_index(&type->_impl, DW_TAG_member, i + 1, &dummy._impl) ==
+                                 NULL);
         }
 
         self->end_struct(type_name, output);
@@ -751,21 +770,21 @@ static FILE *reflect_serialize_inner(const reflect_serializer_t *self, void *obj
     return NULL;
 }
 
-static void serialize_int(void *object, size_t size, FILE *output)
+static void serialize_int(void* object, size_t size, FILE* output)
 {
     switch (size)
     {
     case 1:
-        fprintf(output, "%" PRIi8, *(int8_t *)object);
+        fprintf(output, "%" PRIi8, *(int8_t*)object);
         break;
     case 2:
-        fprintf(output, "%" PRIi16, *(int16_t *)object);
+        fprintf(output, "%" PRIi16, *(int16_t*)object);
         break;
     case 4:
-        fprintf(output, "%" PRIi32, *(int32_t *)object);
+        fprintf(output, "%" PRIi32, *(int32_t*)object);
         break;
     case 8:
-        fprintf(output, "%" PRIi64, *(int64_t *)object);
+        fprintf(output, "%" PRIi64, *(int64_t*)object);
         break;
     default:
         // TODO
@@ -773,21 +792,21 @@ static void serialize_int(void *object, size_t size, FILE *output)
     }
 }
 
-static void serialize_uint(void *object, size_t size, FILE *output)
+static void serialize_uint(void* object, size_t size, FILE* output)
 {
     switch (size)
     {
     case 1:
-        fprintf(output, "%" PRIu8, *(uint8_t *)object);
+        fprintf(output, "%" PRIu8, *(uint8_t*)object);
         break;
     case 2:
-        fprintf(output, "%" PRIu16, *(uint16_t *)object);
+        fprintf(output, "%" PRIu16, *(uint16_t*)object);
         break;
     case 4:
-        fprintf(output, "%" PRIu32, *(uint32_t *)object);
+        fprintf(output, "%" PRIu32, *(uint32_t*)object);
         break;
     case 8:
-        fprintf(output, "%" PRIu64, *(uint64_t *)object);
+        fprintf(output, "%" PRIu64, *(uint64_t*)object);
         break;
     default:
         // TODO
@@ -795,25 +814,25 @@ static void serialize_uint(void *object, size_t size, FILE *output)
     }
 }
 
-static void serialize_float(void *object, size_t size, FILE *output)
+static void serialize_float(void* object, size_t size, FILE* output)
 {
     switch (size)
     {
     case 4:
-        fprintf(output, "%f", *(float *)object);
+        fprintf(output, "%f", *(float*)object);
         break;
     case 8:
-        fprintf(output, "%lf", *(double *)object);
+        fprintf(output, "%lf", *(double*)object);
         break;
     case 16:
-        fprintf(output, "%Lf", *(long double *)object);
+        fprintf(output, "%Lf", *(long double*)object);
     default:
         // TODO
         break;
     }
 }
 
-static void json_serialize(void *object, reflect_repr_t repr, size_t size, FILE *output)
+static void json_serialize(void* object, reflect_repr_t repr, size_t size, FILE* output)
 {
     switch (repr)
     {
@@ -827,19 +846,18 @@ static void json_serialize(void *object, reflect_repr_t repr, size_t size, FILE 
         serialize_uint(object, size, output);
         break;
     case REFLECT_REPR_POINTER:
-        serialize_uint(object, sizeof(void *), output);
+        serialize_uint(object, sizeof(void*), output);
         break;
     case REFLECT_REPR_BOOLEAN:
-        fputs((*(bool *)object) ? "true" : "false", output);
+        fputs((*(bool*)object) ? "true" : "false", output);
         break;
     case REFLECT_REPR_SCHAR:
     case REFLECT_REPR_UCHAR:
-        fputc(*(char *)object, output);
+        fputc(*(char*)object, output);
         break;
-    case REFLECT_REPR_STRING:
-    {
+    case REFLECT_REPR_STRING: {
         fputc('"', output);
-        const char *s = *(const char **)object;
+        const char* s = *(const char**)object;
         size_t len = strlen(s);
         for (size_t i = 0; i < len; i++)
         {
@@ -858,12 +876,12 @@ static void json_serialize(void *object, reflect_repr_t repr, size_t size, FILE 
     }
 }
 
-static void json_begin_member(const char *name, FILE *output)
+static void json_begin_member(const char* name, FILE* output)
 {
     fprintf(output, "\"%s\":", name);
 }
 
-static void json_end_member(const char *name, FILE *output, bool is_last_member)
+static void json_end_member(const char* name, FILE* output, bool is_last_member)
 {
     if (!is_last_member)
     {
@@ -873,27 +891,19 @@ static void json_end_member(const char *name, FILE *output, bool is_last_member)
     (void)name;
 }
 
-static void json_begin_struct(const char *name, FILE *output)
+static void json_begin_struct(const char* name, FILE* output)
 {
     fprintf(output, "{");
     (void)name;
 }
 
-static void json_end_struct(const char *name, FILE *output)
+static void json_end_struct(const char* name, FILE* output)
 {
     fprintf(output, "}");
     (void)name;
 }
 
-const reflect_serializer_t __libreflect_serializer_json = {
-    .serialize = json_serialize,
-    .begin_member = json_begin_member,
-    .end_member = json_end_member,
-    .begin_struct = json_begin_struct,
-    .end_struct = json_end_struct,
-};
-
-static void xml_serialize(void *object, reflect_repr_t repr, size_t size, FILE *output)
+static void xml_serialize(void* object, reflect_repr_t repr, size_t size, FILE* output)
 {
     switch (repr)
     {
@@ -907,18 +917,17 @@ static void xml_serialize(void *object, reflect_repr_t repr, size_t size, FILE *
         serialize_uint(object, size, output);
         break;
     case REFLECT_REPR_POINTER:
-        serialize_uint(object, sizeof(void *), output);
+        serialize_uint(object, sizeof(void*), output);
         break;
     case REFLECT_REPR_BOOLEAN:
-        fputs((*(bool *)object) ? "true" : "false", output);
+        fputs((*(bool*)object) ? "true" : "false", output);
         break;
     case REFLECT_REPR_SCHAR:
     case REFLECT_REPR_UCHAR:
-        fputc(*(char *)object, output);
+        fputc(*(char*)object, output);
         break;
-    case REFLECT_REPR_STRING:
-    {
-        const char *s = *(const char **)object;
+    case REFLECT_REPR_STRING: {
+        const char* s = *(const char**)object;
         size_t len = strlen(s);
         for (size_t i = 0; i < len; i++)
         {
@@ -952,30 +961,62 @@ static void xml_serialize(void *object, reflect_repr_t repr, size_t size, FILE *
     }
 }
 
-static void xml_begin_member(const char *name, FILE *output)
+static void xml_begin_member(const char* name, FILE* output)
 {
     fprintf(output, "<%s>", name);
 }
 
-static void xml_end_member(const char *name, FILE *output, bool is_last_member)
+static void xml_end_member(const char* name, FILE* output, bool is_last_member)
 {
     fprintf(output, "</%s>", name);
     (void)is_last_member;
 }
 
-static void xml_begin_struct(const char *name, FILE *output)
+static void xml_begin_struct(const char* name, FILE* output)
 {
     (void)name;
     (void)output;
 }
 
-static void xml_end_struct(const char *name, FILE *output)
+static void xml_end_struct(const char* name, FILE* output)
 {
     (void)name;
     (void)output;
 }
 
-const reflect_serializer_t __libreflect_serializer_xml = {
+static void c_begin_member(const char* name, FILE* output)
+{
+    fprintf(output, ".%s = ", name);
+}
+
+static void c_end_member(const char* name, FILE* output, bool is_last_member)
+{
+    fprintf(output, ",\n");
+    (void)name;
+    (void)is_last_member;
+}
+
+static void c_begin_struct(const char* name, FILE* output)
+{
+    fprintf(output, "{\n");
+    (void)name;
+}
+
+static void c_end_struct(const char* name, FILE* output)
+{
+    fprintf(output, "}");
+    (void)name;
+}
+
+static const reflect_serializer_t libreflect_serializer_json = {
+    .serialize = json_serialize,
+    .begin_member = json_begin_member,
+    .end_member = json_end_member,
+    .begin_struct = json_begin_struct,
+    .end_struct = json_end_struct,
+};
+
+static const reflect_serializer_t libreflect_serializer_xml = {
     .serialize = xml_serialize,
     .begin_member = xml_begin_member,
     .end_member = xml_end_member,
@@ -983,31 +1024,7 @@ const reflect_serializer_t __libreflect_serializer_xml = {
     .end_struct = xml_end_struct,
 };
 
-static void c_begin_member(const char *name, FILE *output)
-{
-    fprintf(output, ".%s = ", name);
-}
-
-static void c_end_member(const char *name, FILE *output, bool is_last_member)
-{
-    fprintf(output, ",\n");
-    (void)name;
-    (void)is_last_member;
-}
-
-static void c_begin_struct(const char *name, FILE *output)
-{
-    fprintf(output, "{\n");
-    (void)name;
-}
-
-static void c_end_struct(const char *name, FILE *output)
-{
-    fprintf(output, "}");
-    (void)name;
-}
-
-const reflect_serializer_t __libreflect_serializer_c = {
+static const reflect_serializer_t libreflect_serializer_c = {
     .serialize = json_serialize,
     .begin_member = c_begin_member,
     .end_member = c_end_member,
@@ -1015,12 +1032,30 @@ const reflect_serializer_t __libreflect_serializer_c = {
     .end_struct = c_end_struct,
 };
 
-FILE *reflect_serialize(const reflect_serializer_t *self, void *object, reflect_type_t *type, FILE *output)
+FILE* reflect_serialize(const reflect_serializer_t* self,
+                        void* object,
+                        reflect_type_t* type,
+                        FILE* output)
 {
     NOT_NULL(self);
     NOT_NULL(object);
     NOT_NULL(type);
     NOT_NULL(output);
+
+    switch ((uintptr_t)self)
+    {
+    case 1:
+        self = &libreflect_serializer_json;
+        break;
+    case 2:
+        self = &libreflect_serializer_xml;
+        break;
+    case 3:
+        self = &libreflect_serializer_c;
+        break;
+    default:
+        break;
+    }
 
     return reflect_serialize_inner(self, object, type, output);
 }
