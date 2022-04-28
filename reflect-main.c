@@ -34,8 +34,7 @@ struct person
 
 void reflect_pretty_print(const void* object, const char* func_name, const char* var_name)
 {
-    reflect_domain_t* dom = reflect_domain_load_main();
-    reflect_fn_t* fn = reflect_fn(new_a(reflect_fn_t), dom, func_name);
+    reflect_fn_t* fn = reflect_fn(new_a(reflect_fn_t), func_name);
     reflect_var_t* var = reflect_fn_var_by_name(fn, var_name, new_a(reflect_var_t));
     reflect_type_t* type = reflect_var_type(var, new_a(reflect_type_t));
 
@@ -44,8 +43,6 @@ void reflect_pretty_print(const void* object, const char* func_name, const char*
     reflect_serialize(REFLECT_SERIALIZER_XML, (void*)object, type, stdout);
     // fputc('\n', stdout);
     (void)object;
-
-    reflect_domain_unload(dom);
 }
 
 typedef struct person person_t;
@@ -54,6 +51,8 @@ int main(int argc, const char** argv)
 {
     (void)argc;
     (void)argv;
+
+    reflect_init(argc, argv);
 
     struct point point = {
         .x = 1,
@@ -73,4 +72,6 @@ int main(int argc, const char** argv)
     };
 
     print(p);
+
+    reflect_fini();
 }

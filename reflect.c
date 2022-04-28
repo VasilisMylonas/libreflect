@@ -305,45 +305,33 @@ const char* reflect_file(void* obj)
     CHECK_NULL(dwarf_decl_file(obj));
 }
 
-reflect_domain_t* reflect_domain_load(const char* file)
-{
-    NOT_NULL(file);
+// TODO: There should be a linked list of Dwarf* representing each loaded shared object.
+static Dwarf* libreflect_domain;
 
-    int fd = open(file, O_RDONLY);
+int reflect_init(int argc, const char* argv[])
+{
+    (void)argc;
+
+    int fd = open(argv[0], O_RDONLY);
     if (fd == -1)
     {
         REFLECT_RAISE(EBADF);
     }
 
-    Dwarf* d = dwarf_begin(fd, DWARF_C_READ);
+    libreflect_domain = dwarf_begin(fd, DWARF_C_READ);
     close(fd);
 
-    if (d == NULL)
+    if (libreflect_domain == NULL)
     {
         REFLECT_RAISE(EMEDIUMTYPE);
     }
 
-    return (reflect_domain_t*)d;
+    return 0;
 }
 
-void reflect_domain_unload(reflect_domain_t* self)
+void reflect_fini()
 {
-    // TODO
-    if (self == NULL)
-    {
-        return;
-    }
-
-    if (dwarf_end((Dwarf*)self) != 0)
-    {
-        // TODO: Do we swallow this?
-    }
-}
-
-reflect_domain_t* reflect_domain_load_main()
-{
-    extern const char* __progname;
-    return reflect_domain_load(__progname);
+    dwarf_end(libreflect_domain);
 }
 
 bool reflect_type_is_typedef(reflect_type_t* self)
@@ -502,9 +490,9 @@ reflect_repr_t reflect_type_repr(reflect_type_t* self)
     }
 }
 
-reflect_type_t* reflect_type(reflect_type_t* self, reflect_domain_t* dom, const char* name)
+reflect_type_t* reflect_type(reflect_type_t* self, const char* name)
 {
-    OBJ_BY_NAME(self, dom, DW_TAG_typedef || die_is_type(&die), name);
+    OBJ_BY_NAME(self, libreflect_domain, DW_TAG_typedef || die_is_type(&die), name);
 }
 
 reflect_member_t* reflect_type_member_by_index(reflect_type_t* self,
@@ -542,26 +530,17 @@ const char* reflect_member_name(reflect_member_t* self)
     CHECK_NULL(get_name(&self->_impl));
 }
 
-reflect_type_t* reflect_typedef_type(reflect_type_t* self, reflect_type_t* out)
+ptrdiff_t reflect_member_offset(reflect_member_t* self)
 {
     NOT_NULL(self);
-    NOT_NULL(out);
-
-    CHECK_NULL(peel_type((reflect_type_t*)get_type(&self->_impl, &out->_impl)));
-}
-
-void* reflect_get_member(void* object, reflect_member_t* member)
-{
-    NOT_NULL(object);
-    NOT_NULL(member);
 
     Dwarf_Die die;
-    REFLECT_OBJ_TO_DIE(member, &die);
+    REFLECT_OBJ_TO_DIE(self, &die);
 
     Dwarf_Attribute attr;
     if (dwarf_attr(&die, DW_AT_data_member_location, &attr) == NULL)
     {
-        REFLECT_RAISE(ENODATA);
+        REFLECT_RAISE(ENODATA) - 1;
     }
 
     Dwarf_Word offset;
@@ -575,12 +554,35 @@ void* reflect_get_member(void* object, reflect_member_t* member)
     case DW_FORM_udata:
         if (dwarf_formudata(&attr, &offset) != 0)
         {
-            REFLECT_RAISE(ENODATA);
+            REFLECT_RAISE(ENODATA) - 1;
         }
-        return ((uint8_t*)object) + offset;
+        return offset;
     default:
-        REFLECT_RAISE(ENODATA);
+        REFLECT_RAISE(ENODATA) - 1;
     }
+}
+
+reflect_type_t* reflect_typedef_type(reflect_type_t* self, reflect_type_t* out)
+{
+    NOT_NULL(self);
+    NOT_NULL(out);
+
+    CHECK_NULL(peel_type((reflect_type_t*)get_type(&self->_impl, &out->_impl)));
+}
+
+void* reflect_get_member(void* object, reflect_member_t* member)
+{
+    NOT_NULL(object);
+    NOT_NULL(member);
+
+    ptrdiff_t offset = reflect_member_offset(member);
+
+    if (offset == -1)
+    {
+        return NULL;
+    }
+
+    return ((uint8_t*)object) + offset;
 }
 
 bool reflect_fn_is_extern(reflect_fn_t* self)
@@ -661,14 +663,14 @@ const char* reflect_var_name(reflect_var_t* self)
     CHECK_NULL(get_name(&self->_impl));
 }
 
-reflect_fn_t* reflect_fn(reflect_fn_t* self, reflect_domain_t* dom, const char* name)
+reflect_fn_t* reflect_fn(reflect_fn_t* self, const char* name)
 {
-    OBJ_BY_NAME(self, dom, DW_TAG_subprogram, name);
+    OBJ_BY_NAME(self, libreflect_domain, DW_TAG_subprogram, name);
 }
 
-reflect_var_t* reflect_var(reflect_var_t* self, reflect_domain_t* dom, const char* name)
+reflect_var_t* reflect_var(reflect_var_t* self, const char* name)
 {
-    OBJ_BY_NAME(self, dom, DW_TAG_variable, name);
+    OBJ_BY_NAME(self, libreflect_domain, DW_TAG_variable, name);
 }
 
 static FILE* reflect_serialize_inner(const reflect_serializer_t* self,
