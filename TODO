@@ -1,0 +1,11 @@
+inline functions
+extern variables
+artificial functions/variables
+reflect_const_t *reflect_type_const_by_index(reflect_type_t *self, size_t index);
+reflect_const_t *reflect_type_const_by_name(reflect_type_t *self, const char *name);
+reflect_const_t *reflect_type_const_by_value(reflect_type_t *self, long value);
+long reflect_const_value(reflect_const_t *self);
+bool reflect_type_is_const(reflect_type_t *self);
+bool reflect_type_is_volatile(reflect_type_t *self);
+bool reflect_type_is_restrict(reflect_type_t *self);
+bool reflect_type_is_atomic(reflect_type_t *self);

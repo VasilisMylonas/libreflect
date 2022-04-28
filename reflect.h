@@ -1,18 +1,56 @@
+/*
+  This file is part of libreflect (https://github.com/VasilisMylonas/libreflect)
+
+  The MIT License (MIT)
+
+  Copyright (c) 2022 Vasilis Mylonas
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+  OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+ */
+
 #ifndef REFLECT_H
 #define REFLECT_H
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
+// TODO: Document
 typedef struct reflect_type reflect_type_t;
 typedef struct reflect_fn reflect_fn_t;
 typedef struct reflect_var reflect_var_t;
 typedef struct reflect_member reflect_member_t;
 typedef struct reflect_const reflect_const_t;
 typedef struct reflect_obj reflect_obj_t;
+typedef struct reflect_location reflect_location_t;
+typedef struct reflect_serializer reflect_serializer_t;
+typedef enum reflect_repr reflect_repr_t;
 
-typedef enum reflect_repr
+struct reflect_location
+{
+    const char* file;
+    int line;
+    int column;
+};
+
+enum reflect_repr
 {
     REFLECT_REPR_UNKNOWN = 0,
 
@@ -27,7 +65,16 @@ typedef enum reflect_repr
     REFLECT_REPR_UCHAR,
     REFLECT_REPR_SCHAR,
     REFLECT_REPR_STRING,
-} reflect_repr_t;
+};
+
+struct reflect_serializer
+{
+    void (*serialize)(void*, reflect_repr_t, size_t, FILE*);
+    void (*begin_member)(const char*, FILE*);
+    void (*end_member)(const char*, FILE*, bool is_last_member);
+    void (*begin_struct)(const char*, FILE*);
+    void (*end_struct)(const char*, FILE*);
+};
 
 /**
  * Initializes the library.
@@ -88,6 +135,7 @@ const char* reflect_type_name(reflect_type_t* self);
  */
 reflect_repr_t reflect_type_repr(reflect_type_t* self);
 
+// TODO: Document
 bool reflect_type_is_builtin(reflect_type_t* self);
 bool reflect_type_is_array(reflect_type_t* self);
 bool reflect_type_is_union(reflect_type_t* self);
@@ -96,7 +144,6 @@ bool reflect_type_is_enum(reflect_type_t* self);
 bool reflect_type_is_typedef(reflect_type_t* self);
 bool reflect_type_is_pointer(reflect_type_t* self);
 bool reflect_type_is_c_string(reflect_type_t* self);
-
 reflect_member_t* reflect_type_member_by_index(reflect_type_t* self,
                                                size_t index,
                                                reflect_member_t* out);
@@ -117,7 +164,7 @@ reflect_type_t* reflect_member_type(reflect_member_t* self, reflect_type_t* out)
  * Returns the name of a member.
  *
  * @param self The member.
- * @return The member name.
+ * @return The member's name.
  */
 const char* reflect_member_name(reflect_member_t* self);
 
@@ -147,32 +194,48 @@ reflect_fn_t* reflect_fn(reflect_fn_t* self, const char* name);
  */
 reflect_type_t* reflect_fn_ret_type(reflect_fn_t* self, reflect_type_t* out);
 
+// TODO: Document
 bool reflect_fn_is_extern(reflect_fn_t* self);
 reflect_var_t* reflect_fn_param_by_index(reflect_fn_t* self, size_t index, reflect_var_t* out);
 reflect_var_t* reflect_fn_param_by_name(reflect_fn_t* self, const char* name, reflect_var_t* out);
 reflect_var_t* reflect_fn_var_by_index(reflect_fn_t* self, size_t index, reflect_var_t* out);
 reflect_var_t* reflect_fn_var_by_name(reflect_fn_t* self, const char* name, reflect_var_t* out);
 
+/**
+ * Initializes a reflect_var_t object with information about a global variable.
+ *
+ * @param self Pointer to the reflect_var_t object to initialize.
+ * @param name The name of the global variable.
+ * @return NULL on error, otherwise self.
+ */
 reflect_var_t* reflect_var(reflect_var_t* self, const char* name);
+
+/**
+ * Initializes a reflect_type_t object with information about the type of a variable.
+ *
+ * @param self The variable.
+ * @param out Pointer to the reflect_type_t object to initialize.
+ * @return NULL on error, otherwise out.
+ */
 reflect_type_t* reflect_var_type(reflect_var_t* self, reflect_type_t* out);
+
+/**
+ * Returns the name of a variable.
+ *
+ * @param self The variable.
+ * @return The variable's name.
+ */
 const char* reflect_var_name(reflect_var_t* self);
 
-void* reflect_get_member(void* object, reflect_member_t* member);
-
-const char* reflect_file(void* obj);
-size_t reflect_line(void* obj);
-size_t reflect_column(void* obj);
-
-#include <stdio.h>
-
-typedef struct reflect_serializer
-{
-    void (*serialize)(void*, reflect_repr_t, size_t, FILE*);
-    void (*begin_member)(const char*, FILE*);
-    void (*end_member)(const char*, FILE*, bool is_last_member);
-    void (*begin_struct)(const char*, FILE*);
-    void (*end_struct)(const char*, FILE*);
-} reflect_serializer_t;
+/**
+ * Initializes a reflect_location_t with information about the location of a declaration in source
+ * code.
+ *
+ * @param self Pointer to the reflect_location_t object to initialize.
+ * @param target The target declaration.
+ * @return NULL on error, otherwise self.
+ */
+reflect_location_t* reflect_location(reflect_location_t* self, reflect_obj_t* target);
 
 #define REFLECT_SERIALIZER_JSON ((reflect_serializer_t*)1)
 #define REFLECT_SERIALIZER_XML  ((reflect_serializer_t*)2)
@@ -182,19 +245,6 @@ FILE* reflect_serialize(const reflect_serializer_t* self,
                         void* object,
                         reflect_type_t* type,
                         FILE* output);
-
-// TODO:
-// inline functions
-// extern variables
-// artificial functions/variables
-// reflect_const_t *reflect_type_const_by_index(reflect_type_t *self, size_t index);
-// reflect_const_t *reflect_type_const_by_name(reflect_type_t *self, const char *name);
-// reflect_const_t *reflect_type_const_by_value(reflect_type_t *self, long value);
-// long reflect_const_value(reflect_const_t *self);
-// bool reflect_type_is_const(reflect_type_t *self);
-// bool reflect_type_is_volatile(reflect_type_t *self);
-// bool reflect_type_is_restrict(reflect_type_t *self);
-// bool reflect_type_is_atomic(reflect_type_t *self);
 
 struct reflect_obj
 {

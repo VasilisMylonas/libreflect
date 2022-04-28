@@ -273,36 +273,26 @@ static reflect_obj_t* child_by_index(reflect_obj_t* obj, int tag, size_t index, 
     return NULL;
 }
 
-size_t reflect_line(void* obj)
+reflect_location_t* reflect_location(reflect_location_t* self, reflect_obj_t* target)
 {
-    NOT_NULL(obj);
+    NOT_NULL(self);
+    NOT_NULL(target);
 
-    int line = 0;
-    if (dwarf_decl_line(obj, &line) != 0)
+    Dwarf_Die die;
+    if (dwarf_offdie((Dwarf*)target->domain, target->offset, &die) == NULL)
+    {
+        REFLECT_RAISE(EINVAL);
+    }
+
+    self->file = dwarf_decl_file(&die);
+
+    if (self->file == NULL || dwarf_decl_line(&die, &self->line) != 0 ||
+        dwarf_decl_column(&die, &self->column) != 0)
     {
         REFLECT_RAISE(ENODATA);
     }
 
-    return (size_t)line;
-}
-
-size_t reflect_column(void* obj)
-{
-    NOT_NULL(obj);
-
-    int col = 0;
-    if (dwarf_decl_column(obj, &col) != 0)
-    {
-        REFLECT_RAISE(ENODATA);
-    }
-
-    return (size_t)col;
-}
-
-const char* reflect_file(void* obj)
-{
-    NOT_NULL(obj);
-    CHECK_NULL(dwarf_decl_file(obj));
+    return self;
 }
 
 // TODO: There should be a linked list of Dwarf* representing each loaded shared object.
@@ -570,21 +560,6 @@ reflect_type_t* reflect_typedef_type(reflect_type_t* self, reflect_type_t* out)
     CHECK_NULL(peel_type((reflect_type_t*)get_type(&self->_impl, &out->_impl)));
 }
 
-void* reflect_get_member(void* object, reflect_member_t* member)
-{
-    NOT_NULL(object);
-    NOT_NULL(member);
-
-    ptrdiff_t offset = reflect_member_offset(member);
-
-    if (offset == -1)
-    {
-        return NULL;
-    }
-
-    return ((uint8_t*)object) + offset;
-}
-
 bool reflect_fn_is_extern(reflect_fn_t* self)
 {
     NOT_NULL(self);
@@ -682,7 +657,7 @@ static FILE* reflect_serialize_inner(const reflect_serializer_t* self,
     {
         reflect_type_t typedef_type;
         reflect_typedef_type(type, &typedef_type);
-        reflect_serialize(self, object, &typedef_type, output);
+        reflect_serialize_inner(self, object, &typedef_type, output);
         return output;
     }
 
@@ -723,7 +698,7 @@ static FILE* reflect_serialize_inner(const reflect_serializer_t* self,
                 ._impl.offset = dwarf_dieoffset(&inner_type),
             };
 
-            reflect_serialize(self, *(void**)object, &type2, output);
+            reflect_serialize_inner(self, *(void**)object, &type2, output);
         }
 
         return output;
@@ -752,7 +727,10 @@ static FILE* reflect_serialize_inner(const reflect_serializer_t* self,
 
             self->begin_member(member_name, output);
 
-            reflect_serialize(self, reflect_get_member(object, &member), &member_type, output);
+            // TODO: error
+            ptrdiff_t offset = reflect_member_offset(&member);
+
+            reflect_serialize_inner(self, ((uint8_t*)object) + offset, &member_type, output);
 
             // This is really dumb. Some formats, cough cough JSON, need special handling for the
             // last member. We have to provide this info to the user.
