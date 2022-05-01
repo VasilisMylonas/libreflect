@@ -246,6 +246,10 @@ FILE* reflect_serialize(const reflect_serializer_t* self,
                         reflect_type_t* type,
                         FILE* output);
 
+#define reflect_pretty_print(var) _reflect_pretty_print(&var, __func__, #var)
+
+void _reflect_pretty_print(const void*, const char*, const char*);
+
 struct reflect_obj
 {
     void* domain;

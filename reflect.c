@@ -1046,3 +1046,13 @@ FILE* reflect_serialize(const reflect_serializer_t* self,
 
     return reflect_serialize_inner(self, object, type, output);
 }
+
+void _reflect_pretty_print(const void* object, const char* func_name, const char* var_name)
+{
+    reflect_fn_t* fn = reflect_fn(&(reflect_fn_t){}, func_name);
+    reflect_var_t* var = reflect_fn_var_by_name(fn, var_name, &(reflect_var_t){});
+    reflect_type_t* type = reflect_var_type(var, &(reflect_type_t){});
+    fprintf(stdout, "%s %s = ", reflect_type_name(type), reflect_var_name(var));
+    reflect_serialize(REFLECT_SERIALIZER_C, (void*)object, type, stdout);
+    fputc('\n', stdout);
+}
