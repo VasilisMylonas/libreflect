@@ -397,8 +397,9 @@ size_t reflect_type_size(reflect_type_t* self)
 
     Dwarf_Die type;
     REFLECT_OBJ_TO_DIE(self, &type);
-    int size = dwarf_bytesize(&type);
-    if (size <= 0)
+
+    Dwarf_Word size;
+    if (dwarf_aggregate_size(&type, &size) != 0)
     {
         REFLECT_RAISE(ENODATA);
     }
@@ -419,6 +420,12 @@ const char* reflect_type_name(reflect_type_t* self)
     if (reflect_type_is_pointer(self))
     {
         return "void*";
+    }
+
+    // TODO: very generic
+    if (reflect_type_is_array(self))
+    {
+        return "void[]";
     }
 
     CHECK_NULL(get_name(&self->_impl));
